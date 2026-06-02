@@ -4,7 +4,7 @@
   "description": "カジノテイストの集中力アップアプリ",
   "main": "index.html",
   "scripts": {
-    "build": "mkdir -p www && cp index.html www/ && cp manifest.json www/ && cp sw.js www/ && (cp *.png www/ 2>/dev/null || true) && (cp *.jpg www/ 2>/dev/null || true)",
+    "build": "mkdir -p www && cp public/index.html www/ && cp public/manifest.json www/ && cp public/sw.js www/ && (cp public/*.png www/ 2>/dev/null || true) && (cp public/*.jpg www/ 2>/dev/null || true)",
     "android:sync": "npm run build && npx cap sync android",
     "ios:sync": "npm run build && npx cap sync ios",
     "android:open": "npx cap open android",
