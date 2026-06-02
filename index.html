@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Focus Dice">
+    <meta name="theme-color" content="#d4af37">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./ikemen.png">
+    <title>Focus Dice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Serif+JP:wght@400;500;600&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        casino: {
+                            dark: '#0a0a0a',
+                            darker: '#050505',
+                            red: '#8b0000',
+                            redlight: '#dc2626',
+                            redhover: '#ef4444',
+                            gold: '#d4af37',
+                            goldlight: '#f59e0b',
+                            goldhover: '#fbbf24'
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['"Noto Serif JP"', 'serif'],
+                        cinzel: ['Cinzel', 'serif'],
+                        mono: ['"Roboto Mono"', 'monospace']
+                    },
+                    boxShadow: {
+                        'glow-red': '0 0 30px rgba(220, 38, 38, 0.5)',
+                        'glow-gold': '0 0 30px rgba(212, 175, 55, 0.5)',
+                        'glow-blue': '0 0 30px rgba(59, 130, 246, 0.5)',
+                        'inner-glow': 'inset 0 2px 10px rgba(0,0,0,0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Serif JP', serif;
+            background: radial-gradient(ellipse at top, #1a0f0f 0%, #0a0a0a 30%, #050505 100%);
+            color: #f5f5f5;
+            margin: 0;
+            min-height: 100dvh;
+            height: 100dvh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            perspective: 1000px;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: none;
+        }
+        
+        /* モバイルでのタッチ操作を最適化 */
+        button, select, input, textarea {
+            min-height: 44px;
+            font-size: 16px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .bg-layer {
+            position: fixed;
+            inset: -5%;
+            background-image: linear-gradient(rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.92)), url('./bg.png');
+            background-size: cover;
+            background-position: center;
+            z-index: -3;
+            pointer-events: none;
+            filter: saturate(1.2) contrast(1.1);
+        }
+
+        .glass-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.06) 100%);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.18), 0 0 0 1px rgba(0,0,0,0.3);
+        }
+
+        .live2d-container {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            transform-style: preserve-3d;
+            animation: dealerBreathe 6s ease-in-out infinite;
+            transform-origin: center bottom;
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            width: 100%;
+            height: 100%;
+            /* ディーラーを明るくするためのグラデーション */
+            background: radial-gradient(ellipse at center bottom, rgba(212, 175, 55, 0.08) 0%, transparent 50%);
+        }
+
+        .live2d-layer {
+            position: absolute;
+            inset: 0;
+            background-image: url('./ikemen.png');
+            background-size: contain;
+            background-position: center bottom;
+            background-repeat: no-repeat;
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* パーツごとの自律アニメーション（超自然Live2D） */
+        /* 統合ベースレイヤー */
+        .layer-body { 
+            z-index: 1; 
+            background-image: url('./ikemen.png');
+        }
+        /* 浮遊するダイス */
+        .layer-dice {
+            z-index: 6;
+            background-image: url('./layer_dice.png');
+            animation: floatDice 5s ease-in-out infinite;
+            transform-origin: center 70%;
+        }
+        /* まばたきオーバーレイ */
+        .layer-blink {
+            z-index: 7;
+            background-image: url('./ikemen_blink_eyes.png');
+            opacity: 0 !important;
+            transition: opacity 0.05s;
+            transform: translate(1px, 0px);
+        }
+        .is-blinking .layer-blink {
+            opacity: 1 !important;
+        }
+
+        @keyframes dealerBreathe {
+            0%, 100% { 
+                transform: scale(1) translateY(0) rotate(0deg); 
+            }
+            50% { 
+                transform: scale(1.015) translateY(-3px) rotate(0.2deg); 
+            }
+        }
+        @keyframes floatDice {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-5px) rotate(1.5deg); }
+        }
+        .dealer-roll-anim {
+            animation: dealerRoll 0.6s ease-out forwards;
+        }
+        @keyframes dealerRoll {
+            0% { transform: scale(1) translateY(0); }
+            20% { transform: scale(1.03) translateY(-8px); }
+            100% { transform: scale(1) translateY(0); }
+        }
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.5) 100%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* フェードインアニメーション */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fadeInUp {
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+
+        /* 遅延アニメーションクラス */
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+        .delay-400 { animation-delay: 0.4s; }
+        .delay-500 { animation-delay: 0.5s; }
+
+        .tab-content {
+            display: none;
+            opacity: 0;
+        }
+        .tab-content.active {
+            display: flex;
+            animation: fadeInTab 0.4s ease-out forwards;
+        }
+        @keyframes fadeInTab {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .dice-anim { animation: shake 0.15s infinite; }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg) scale(1); }
+            20% { transform: translate(-3px, 0px) rotate(2deg) scale(1.05); }
+            40% { transform: translate(1px, -1px) rotate(-2deg) scale(0.95); }
+            60% { transform: translate(-3px, 1px) rotate(0deg) scale(1.02); }
+            80% { transform: translate(-1px, -1px) rotate(2deg) scale(0.98); }
+            100% { transform: translate(1px, -2px) rotate(-1deg) scale(1); }
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+
+        .glow-red { text-shadow: 0 0 15px rgba(178, 34, 34, 0.8), 0 0 30px rgba(139, 0, 0, 0.6); }
+        .glow-blue { text-shadow: 0 0 15px rgba(96, 165, 250, 0.8), 0 0 30px rgba(59, 130, 246, 0.6); }
+        .glow-white { text-shadow: 0 0 10px rgba(255, 255, 255, 0.6); }
+        .glow-gold { text-shadow: 0 0 10px rgba(212, 175, 55, 0.6), 0 0 20px rgba(212, 175, 55, 0.4); }
+
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+            .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        }
+
+        @keyframes slideInUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -10px); } }
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .toast-enter { animation: slideInUp 0.3s ease-out forwards; }
+        .toast-exit { animation: fadeOut 0.3s ease-out forwards; }
+
+        .select-wrapper::after {
+            content: '▼';
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255,255,255,0.5);
+            pointer-events: none;
+            font-size: 0.8rem;
+        }
+        
+        .content-area {
+            height: calc(100vh - 70px);
+        }
+    </style>
+</head>
+<body class="relative flex flex-col items-center antialiased">
+    <div id="bg-layer" class="bg-layer"></div>
+    <div id="dealer-layer" class="live2d-container">
+        <!-- 統合ベースレイヤー -->
+        <div class="live2d-layer layer-body"></div>
+        <!-- 浮遊するダイスレイヤー -->
+        <div class="live2d-layer layer-dice"></div>
+        <!-- まばたきオーバーレイ -->
+        <div class="live2d-layer layer-blink"></div>
+    </div>
+    <div class="overlay"></div>
+
+    <!-- Main Content Container -->
+    <div class="content-area relative z-10 w-full flex flex-col items-center overflow-x-hidden overflow-y-auto h-[100dvh] pb-[90px] pt-4">
+        
+        <!-- Tab 1: Main Game -->
+        <main id="content-main" class="tab-content active flex-col items-center w-full max-w-lg px-4 gap-6 text-center">
+            <h1 class="font-cinzel text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-gray-100 to-gray-400 drop-shadow-lg tracking-[0.15em] py-2 mt-4 animate-fadeInUp">
+                Focus Dice
+            </h1>
+
+            <div class="w-full max-w-md glass-card rounded-3xl p-8 relative overflow-hidden flex flex-col items-center mt-[5vh] md:mt-[20vh] shadow-2xl shadow-black/50 animate-fadeInUp delay-200">
+                <div class="absolute -top-12 -right-12 w-40 h-40 bg-casino-red/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -bottom-12 -left-12 w-40 h-40 bg-casino-gold/10 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="min-h-[5rem] flex items-center justify-center w-full mb-6 relative z-10 bg-black/30 rounded-2xl p-4 border border-casino-gold/30">
+                    <p id="main-dealer-text" class="text-base md:text-lg text-gray-100 italic leading-relaxed font-serif text-center w-full transition-all duration-300 font-medium">
+                        <!-- Populated by JS -->
+                    </p>
+                </div>
+
+                <div id="timer-display" class="hidden text-6xl md:text-8xl font-mono font-bold text-white tracking-widest my-4 transition-all duration-500 drop-shadow-[0_0_25px_rgba(255,255,255,0.6)] relative z-10">
+                    05:00
+                </div>
+
+                <div id="dice-wrapper" class="flex justify-center my-8 gap-10 transition-all duration-500 relative z-10">
+                    <!-- User Dice -->
+                    <div class="flex flex-col items-center gap-3">
+                        <span id="user-dice-label" class="hidden font-serif text-gray-300 text-xs tracking-widest font-bold">貴方</span>
+                        <div id="dice-container" class="w-32 h-32 md:w-36 md:h-36 flex items-center justify-center bg-black/50 rounded-3xl border border-white/25 shadow-[0_0_30px_rgba(0,0,0,0.8)] transition-all duration-300 relative overflow-hidden group">
+                            <div class="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-white/5"></div>
+                            <span id="dice-value" class="text-6xl md:text-7xl font-cinzel font-bold text-white transition-colors duration-300 relative z-10">?</span>
+                        </div>
+                    </div>
+                    <!-- Dealer Dice -->
+                    <div id="dealer-dice-area" class="hidden flex-col items-center gap-3">
+                        <span class="font-serif text-casino-gold text-xs tracking-widest font-bold">ディーラー</span>
+                        <div id="dealer-dice-container" class="w-32 h-32 md:w-36 md:h-36 flex items-center justify-center bg-black/50 rounded-3xl border border-casino-gold/60 shadow-[0_0_30px_rgba(212,175,55,0.5)] transition-all duration-300 relative overflow-hidden group">
+                            <div class="absolute inset-0 bg-gradient-to-br from-casino-gold/20 via-transparent to-casino-gold/10"></div>
+                            <span id="dealer-dice-value" class="text-6xl md:text-7xl font-cinzel font-bold text-casino-gold transition-colors duration-300 relative z-10">?</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pre-roll Controls -->
+                <div id="controls" class="flex flex-col gap-5 w-full mt-2 transition-all duration-500">
+                    <div class="relative select-wrapper group">
+                        <select id="task-select" class="w-full appearance-none bg-black/40 border border-white/20 text-white text-center py-4 px-5 rounded-2xl focus:outline-none focus:border-casino-goldlight transition-all duration-300 cursor-pointer text-base font-serif backdrop-blur-sm shadow-inner-glow">
+                        </select>
+                        <div class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <button id="roll-button" class="w-full relative overflow-hidden bg-gradient-to-r from-casino-redhover via-casino-redlight to-casino-red text-white py-4 rounded-2xl font-bold tracking-widest transition-all duration-300 hover:shadow-glow-red active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed border border-casino-redlight/50 group">
+                        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite]"></div>
+                        <span class="relative z-10 text-lg drop-shadow-md">ダイスを振る</span>
+                    </button>
+                </div>
+
+                <!-- Active Timer Controls -->
+                <div id="active-controls" class="hidden flex-col gap-4 w-full mt-4 transition-all duration-500 animate-[fadeInTab_0.4s_ease-out]">
+                    <button id="pause-btn" onclick="togglePause()" class="w-full bg-white/8 border border-white/25 text-gray-100 py-4 rounded-2xl font-serif tracking-widest transition-all duration-300 hover:bg-white/15 hover:border-white/35 text-base flex items-center justify-center gap-3 active:scale-[0.97] shadow-lg shadow-black/30">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="6" y="4" width="4" height="16"></rect>
+                            <rect x="14" y="4" width="4" height="16"></rect>
+                        </svg>
+                        一時停止
+                    </button>
+                    <button id="finish-btn" onclick="finishAndSave()" class="w-full bg-gradient-to-r from-casino-goldlight via-casino-gold to-casino-goldlight border border-casino-gold/70 text-white py-4 rounded-2xl font-serif font-bold tracking-widest transition-all duration-300 hover:shadow-glow-gold active:scale-[0.97] text-base flex items-center justify-center gap-3 shadow-lg shadow-casino-gold/20">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        </svg>
+                        集中を終了して記録
+                    </button>
+                </div>
+
+                <!-- Gamble Proposal Controls -->
+                <div id="gamble-controls" class="hidden flex-col gap-4 w-full mt-4 transition-all duration-500 animate-[fadeInTab_0.4s_ease-out]">
+                    <div class="flex gap-4">
+                        <button id="gamble-accept-btn" onclick="acceptGamble()" class="flex-1 bg-gradient-to-r from-casino-redhover to-casino-red border border-casino-redlight/60 text-white py-4 rounded-2xl font-serif font-bold tracking-widest transition-all duration-300 hover:shadow-glow-red active:scale-[0.97] text-base">
+                            受けて立つ
+                        </button>
+                        <button id="gamble-reject-btn" onclick="rejectGamble()" class="flex-1 bg-white/8 border border-white/25 text-gray-200 py-4 rounded-2xl font-serif tracking-widest transition-all duration-300 hover:bg-white/15 hover:border-white/35 active:scale-[0.97] text-base">
+                            拒否する
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Gamble Action Controls -->
+                <div id="gamble-action-controls" class="hidden flex-col gap-4 w-full mt-4 transition-all duration-500 animate-[fadeInTab_0.4s_ease-out]">
+                    <button id="gamble-roll-btn" onclick="rollGambleDice()" class="w-full bg-gradient-to-r from-casino-goldlight via-casino-gold to-casino-goldlight border border-casino-gold/70 text-white py-4 rounded-2xl font-serif font-bold tracking-widest transition-all duration-300 hover:shadow-glow-gold active:scale-[0.97] text-base">
+                        ダイスを振る
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Tab 2: Dashboard -->
+        <main id="content-dash" class="tab-content flex-col items-center w-full max-w-2xl px-4 gap-6 pt-[10vh] md:pt-[20vh]">
+            
+            <div class="w-full glass-card rounded-3xl p-8 text-center shadow-xl shadow-black/40 relative overflow-hidden">
+                <div class="absolute -top-12 -right-12 w-40 h-40 bg-casino-gold/10 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-12 -left-12 w-40 h-40 bg-casino-red/10 rounded-full blur-3xl"></div>
+                <p id="streak-display" class="font-cinzel text-xl md:text-2xl font-bold text-casino-gold drop-shadow-[0_0_15px_rgba(212,175,55,0.6)] tracking-[0.15em] relative z-10">
+                    現在 0日連続 集中達成中
+                </p>
+                
+                <div class="mt-6 mb-2 relative z-10">
+                    <p id="dash-dealer-text" class="text-sm md:text-base text-gray-200 italic px-4 border-l-2 border-casino-gold leading-relaxed font-serif text-left">
+                        <!-- Dynamic text -->
+                    </p>
+                </div>
+            </div>
+
+            <div class="w-full glass-card rounded-3xl p-6 relative shadow-xl shadow-black/40 overflow-hidden">
+                <div class="absolute -top-8 -left-8 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
+                <h3 class="text-gray-200 font-serif text-sm tracking-widest mb-4 border-b border-white/15 pb-3 font-bold">今日のタスク配分</h3>
+                <div class="relative h-[220px] md:h-[250px] w-full z-10">
+                    <canvas id="todayChart"></canvas>
+                </div>
+            </div>
+
+            <div class="w-full glass-card rounded-3xl p-6 relative shadow-xl shadow-black/40 overflow-hidden">
+                <div class="absolute -bottom-8 -right-8 w-24 h-24 bg-casino-gold/10 rounded-full blur-2xl"></div>
+                <h3 class="text-gray-200 font-serif text-sm tracking-widest mb-4 border-b border-white/15 pb-3 font-bold">過去7日間の戦歴（分）</h3>
+                <div class="relative h-[220px] md:h-[250px] w-full z-10">
+                    <canvas id="historyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="w-full glass-card rounded-3xl p-6 relative shadow-xl shadow-black/40 overflow-hidden">
+                <div class="absolute -top-8 -right-8 w-24 h-24 bg-casino-red/10 rounded-full blur-2xl"></div>
+                <h3 class="text-gray-200 font-serif text-sm tracking-widest mb-4 border-b border-white/15 pb-3 font-bold">本日のセッション記録</h3>
+                <div id="session-list" class="space-y-2 max-h-[350px] overflow-y-auto z-10 relative">
+                </div>
+            </div>
+            
+        </main>
+
+        <!-- Tab 3: Settings -->
+        <main id="content-settings" class="tab-content flex-col items-center w-full max-w-lg px-4 gap-6 pt-[10vh] md:pt-[20vh]">
+            
+            <div class="w-full glass-card rounded-3xl p-8 flex flex-col gap-6 text-left shadow-xl shadow-black/40 relative overflow-hidden">
+                <div class="absolute -top-12 -left-12 w-40 h-40 bg-casino-red/10 rounded-full blur-3xl"></div>
+                <div class="absolute -bottom-12 -right-12 w-40 h-40 bg-casino-gold/10 rounded-full blur-3xl"></div>
+                <h2 class="text-xl font-serif font-bold text-gray-100 tracking-widest border-b border-white/15 pb-3 text-center mb-2 relative z-10 flex items-center justify-center gap-2">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    設定
+                </h2>
+                
+                <div class="flex gap-4 relative z-10">
+                    <div class="flex-1">
+                        <label class="block text-gray-200 text-sm mb-3 tracking-wider font-serif" for="setting-minutes">
+                            集中の最低分数 (分)
+                        </label>
+                        <input type="number" id="setting-minutes" min="1" max="120" class="w-full bg-black/40 border border-white/20 text-white py-4 px-5 rounded-2xl focus:outline-none focus:border-casino-goldlight transition-all text-base font-mono backdrop-blur-sm shadow-inner-glow">
+                    </div>
+                    <div class="flex-1 relative z-10">
+                        <label class="block text-gray-200 text-sm mb-3 tracking-wider font-serif" for="setting-rest">
+                            通常の休憩分数 (分)
+                        </label>
+                        <input type="number" id="setting-rest" min="1" max="60" class="w-full bg-black/40 border border-white/20 text-white py-4 px-5 rounded-2xl focus:outline-none focus:border-casino-goldlight transition-all text-base font-mono backdrop-blur-sm shadow-inner-glow">
+                    </div>
+                </div>
+
+                <div class="relative z-10">
+                    <label class="block text-gray-200 text-sm mb-3 tracking-wider font-serif" for="setting-tasks">
+                        集中する項目 (改行区切り)
+                    </label>
+                    <textarea id="setting-tasks" rows="5" class="w-full bg-black/40 border border-white/20 text-white py-4 px-5 rounded-2xl focus:outline-none focus:border-casino-goldlight transition-all text-base font-serif resize-none backdrop-blur-sm shadow-inner-glow leading-relaxed"></textarea>
+                </div>
+
+                <div class="flex flex-col gap-4 mt-2 border-t border-white/15 pt-6 relative z-10">
+                    <label class="block text-gray-200 text-sm tracking-wider font-serif mb-1 font-bold flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        データのバックアップ
+                    </label>
+                    <div class="flex gap-4">
+                        <button onclick="exportData()" class="flex-1 bg-white/8 text-gray-200 py-4 rounded-2xl text-base hover:bg-white/15 transition-all border border-white/25 font-serif active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-black/30">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="8 17 12 21 16 17"></polyline>
+                                <line x1="12" y1="12" x2="12" y2="21"></line>
+                                <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path>
+                            </svg>
+                            エクスポート
+                        </button>
+                        <button onclick="document.getElementById('import-file').click()" class="flex-1 bg-white/8 text-gray-200 py-4 rounded-2xl text-base hover:bg-white/15 transition-all border border-white/25 font-serif active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-black/30">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            インポート
+                        </button>
+                        <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(event)">
+                    </div>
+                </div>
+
+                <button id="save-settings-btn" class="w-full mt-2 bg-gradient-to-r from-casino-redhover via-casino-redlight to-casino-red text-white py-5 rounded-2xl font-bold tracking-[0.2em] transition-all duration-300 hover:shadow-glow-red active:scale-[0.97] border border-casino-redlight/50 relative overflow-hidden group shadow-lg shadow-casino-red/30">
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite]"></div>
+                    <span class="relative z-10">設定を保存</span>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 w-full z-50 glass-card border-t border-white/15 pb-safe shadow-2xl shadow-black/50">
+        <div class="flex justify-around items-center h-[80px] px-2 max-w-md mx-auto">
+            <button id="tab-main" class="tab-btn flex-1 flex flex-col items-center justify-center gap-1 text-casino-goldlight transition-all duration-300 min-h-[60px] active:scale-95 bg-casino-gold/10 rounded-2xl mx-1 shadow-glow-gold" onclick="switchTab('main')">
+                <svg class="w-7 h-7 drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <circle cx="15.5" cy="8.5" r="1.5"></circle>
+                    <circle cx="8.5" cy="15.5" r="1.5"></circle>
+                    <circle cx="15.5" cy="15.5" r="1.5"></circle>
+                    <circle cx="12" cy="12" r="1.5"></circle>
+                </svg>
+                <span class="text-xs font-serif tracking-wider font-bold">タイマー</span>
+            </button>
+            <button id="tab-dash" class="tab-btn flex-1 flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-gray-300 transition-all duration-300 min-h-[60px] active:scale-95 mx-1" onclick="switchTab('dash')">
+                <svg class="w-7 h-7 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                <span class="text-xs font-serif tracking-wider font-bold">ダッシュボード</span>
+            </button>
+            <button id="tab-settings" class="tab-btn flex-1 flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-gray-300 transition-all duration-300 min-h-[60px] active:scale-95 mx-1" onclick="switchTab('settings')">
+                <svg class="w-7 h-7 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                <span class="text-xs font-serif tracking-wider font-bold">マイページ</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-28 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-casino-gold/20 to-black/70 backdrop-blur-xl border border-casino-gold/60 text-casino-gold px-8 py-4 rounded-2xl shadow-glow-gold font-serif tracking-wider text-base hidden z-50 flex items-center gap-3">
+        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span id="toast-msg" class="font-bold">設定を保存しました</span>
+    </div>
+
+    <script>
+        // --- Audio System (Web Audio API) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playDiceSound() {
+            initAudio();
+            for (let i = 0; i < 6; i++) {
+                setTimeout(() => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(300 + Math.random() * 300, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.05);
+                }, i * 150 + Math.random() * 50);
+            }
+        }
+
+        function playTimerEndSound() {
+            initAudio();
+            const osc1 = audioCtx.createOscillator();
+            const osc2 = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(880, audioCtx.currentTime); 
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(1760, audioCtx.currentTime); 
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
+            osc1.start();
+            osc2.start();
+            osc1.stop(audioCtx.currentTime + 2.5);
+            osc2.stop(audioCtx.currentTime + 2.5);
+        }
+
+        // --- WakeLock API ---
+        let wakeLock = null;
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try { wakeLock = await navigator.wakeLock.request('screen'); } 
+                catch (err) { console.warn('Wake Lock error:', err); }
+            }
+        }
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => wakeLock = null);
+            }
+        }
+
+        // --- Settings Management ---
+        const DEFAULT_SETTINGS = {
+            focusMinutes: 5,
+            restMinutes: 5,
+            tasks: ["医療事務", "卒論", "ITパスポート", "読書", "プログラミング", "その他"]
+        };
+        let currentSettings = JSON.parse(localStorage.getItem('focusDiceSettings')) || DEFAULT_SETTINGS;
+        if (!Array.isArray(currentSettings.tasks)) currentSettings.tasks = DEFAULT_SETTINGS.tasks;
+        if (typeof currentSettings.focusMinutes !== 'number') currentSettings.focusMinutes = DEFAULT_SETTINGS.focusMinutes;
+        if (typeof currentSettings.restMinutes !== 'number') currentSettings.restMinutes = DEFAULT_SETTINGS.restMinutes;
+
+        // --- Core Data ---
+        let records = JSON.parse(localStorage.getItem('focusDiceRecords')) || {};
+        
+        // 旧データ形式（オブジェクト）から新データ形式（配列）へマイグレーション
+        function migrateRecords() {
+            let migrated = false;
+            for (const date in records) {
+                if (!Array.isArray(records[date])) {
+                    // 旧形式：{ taskName: minutes, ... }
+                    const oldData = records[date];
+                    const newData = [];
+                    for (const task in oldData) {
+                        const minutes = oldData[task];
+                        // ダミーの時刻を設定（当日の0時からランダムに配置）
+                        const today = new Date(date);
+                        const randomHour = Math.floor(Math.random() * 12) + 8; // 8時〜20時の間
+                        const start = new Date(today);
+                        start.setHours(randomHour, 0, 0, 0);
+                        const end = new Date(start.getTime() + minutes * 60 * 1000);
+                        
+                        newData.push({
+                            task: task,
+                            startTime: start.getTime(),
+                            endTime: end.getTime(),
+                            duration: minutes
+                        });
+                    }
+                    records[date] = newData;
+                    migrated = true;
+                }
+            }
+            if (migrated) {
+                localStorage.setItem('focusDiceRecords', JSON.stringify(records));
+                console.log('Records migrated to new format');
+            }
+        }
+        migrateRecords();
+        
+        // --- Dialogue System ---
+        const DIALOGUE = {
+            idle: [
+                "お時間でございます。対象を選び、準備を整えてください。", 
+                "……お待ちしておりました。今日の貴方は、運命の女神に愛されているでしょうか？", 
+                "サイコロは嘘をつきません。さあ、貴方の覚悟を見せてください。", 
+                "テキストを開く準備はよろしいですか？ すべてはダイスが決めます。", 
+                "迷う必要はありません。貴方がすべきことは、ただこのダイスを振ることだけです。", 
+                "さあ、始めましょうか。言い訳の通用しない遊戯を。", 
+                "今日のチップは何にベットしますか？ 悔いのない選択を。", 
+                "……ふふ、少し緊張しているようですね。深呼吸をしてからどうぞ。", 
+                "貴方の時間を、私に預けていただけますか？", 
+                "ルールはシンプルです。ボタンを押し、運命に従う。それだけですよ。"
+            ],
+            even: [
+                "偶数ですね。言い訳は無用です。決められた時間、テキストに向かっていただきましょう。", 
+                "私の勝ち、といったところでしょうか。さあ、作業を始めてください。", 
+                "……逃げられませんよ。貴方自身で選んだ道です。集中してください。", 
+                "チッ、チッ、チッ……時計の針は動き出しました。よそ見をしている暇はありませんよ。", 
+                "素晴らしい。貴方が真剣に取り組む姿を見るための時間です。", 
+                "偶数。……ふふ、観念してペンを握ってください。", 
+                "神は貴方に試練を与えたようです。この程度の時間、貴方なら造作もないでしょう？", 
+                "さあ、ショーの始まりです。時間が来るまで、その席を立つことは許しません。", 
+                "ため息をついても時間は減りませんよ。手を動かしてください。", 
+                "没入の準備はいいですか？ 周りの音はすべて消し去りなさい。"
+            ],
+            odd: [
+                "奇数ですか。運がいいですね。設定された時間、ゆっくりお休みください。", 
+                "……今回は貴方の勝ちです。少しだけ、羽を伸ばすことを許可しましょう。", 
+                "おや、今の貴方には休息が必要だと判断されたようですね。", 
+                "時計は止めておきます。温かい飲み物でも淹れてきてはいかがですか？", 
+                "焦る必要はありません。今はただ、心と体を休めてください。", 
+                "……ふふ、嬉しそうな顔をしますね。存分にリラックスしてください。", 
+                "休息もまた、次への布石。この時間を無駄にしないことです。", 
+                "運命の女神は貴方に微笑んだようです。おめでとうございます。", 
+                "……仕方ありませんね。特別にこの時間だけは、貴方を解放してあげましょう。", 
+                "良い出目です。背伸びをして、少し遠くを眺めてみてください。"
+            ],
+            finish: [
+                "時間です。素晴らしい集中力でした。お疲れ様です。", 
+                "……お見事です。貴方のその没入、見ていて退屈しませんでしたよ。", 
+                "約束の時間は終わりました。ペンを置き、息を吐いてください。", 
+                "見事な戦いぶりでした。ご自身の努力を誇ってください。", 
+                "……ふふ、やればできるじゃないですか。この調子です。", 
+                "終了の合図です。貴方の頭脳は、今確実に研ぎ澄まされました。", 
+                "お疲れ様でした。テキストを閉じて、少し肩の力を抜いてください。", 
+                "……良い目をしていましたよ。その調子で積み上げていきましょう。", 
+                "見届けさせていただきました。本日のノルマ、見事達成です。", 
+                "時計の針が止まりました。貴方の勝利です。お疲れ様でした。"
+            ],
+            gamble_propose: [
+                "……さて。ここで一つ、私と賭けをしませんか？", 
+                "素晴らしい集中力でした。……この後の時間、私との勝負で増やしてみる気はありませんか？", 
+                "これで終わるのは少々退屈ですね。お互いのダイスで、次の運命を決めましょうか。", 
+                "……ふふ、まだ物足りない顔をしていますね。私と直接、大勝負といきましょうか。", 
+                "貴方の運、ここで試してみませんか？ 出た目×10分の、デスマッチです。", 
+                "休憩に向かう前に……私と一勝負、いかがです？ 拒否する権利はありますよ。", 
+                "……私の手元に、特別なダイスがあります。これを使って、ヒリヒリする遊びをしませんか？", 
+                "さあ、どうしますか？ 堅実に休むか、それとも……リスクを背負って大きなリターンを狙うか。", 
+                "貴方の今の運気なら、私に勝てるかもしれませんよ。……乗りますか？", 
+                "ふふ……ただの休憩ではつまらないでしょう。勝てば大型連休、負ければ……わかっていますね？"
+            ],
+            gamble_user_win: [
+                "……貴方の勝ちですか。お見事です。約束通り、極上の休息を提供しましょう。", 
+                "チッ……失礼。運を味方につけましたね。存分にお休みください。", 
+                "……ふふ、まさか私より大きな目を出すとは。完敗です。どうぞ、ごゆっくり。", 
+                "貴方の強運には恐れ入ります。この長い休息は、貴方が勝ち取った戦利品です。", 
+                "……やられましたね。約束の時間を差し上げます。席を立っても構いませんよ。", 
+                "ディーラーの私が負けるとは……。良いでしょう、今は貴方の好きになさい。", 
+                "お見事。これほどの運を引き寄せるとは。……ゆっくりと羽を伸ばしてください。", 
+                "……フッ、良い表情だ。その顔を見られただけでも、負けた甲斐がありましたよ。", 
+                "文句なしの勝利です。これ以上私から言うことはありません。お休みなさい。", 
+                "……次こそは負けませんよ。ですが今は、貴方の勝利を讃えましょう。"
+            ],
+            gamble_dealer_win: [
+                "……私の勝ちですね。言い訳は聞けませんよ、さあテキストを開いてください。", 
+                "勝負は非情なものです。たっぷりと、学びに没頭していただきましょうか。", 
+                "……ふふ、甘いですね。貴方の運はその程度でしたか。さあ、席に戻りなさい。", 
+                "リスクを背負った代償です。この長い時間、私から逃げられると思わないでください。", 
+                "……絶望するにはまだ早いですよ。これは貴方が成長するための、神からの贈り物です。", 
+                "私に勝とうなど、100年早いですね。……さあ、言い訳をせずにペンを握りなさい。", 
+                "……フッ、泣きそうな顔をしても無駄ですよ。ルールの通りに執行させていただきます。", 
+                "自分の運のなさを呪うことです。……私がきっちりと、最後まで見張って差し上げます。", 
+                "ようこそ、終わりのない没入の世界へ。……覚悟はよろしいですか？", 
+                "……後悔していますか？ しかし、ダイスはすでに振られました。さあ、始めましょう。"
+            ],
+            gamble_draw: [
+                "おや、偶然にも同じ目ですね。運命はまだ決着を望んでいないようです。振り直しましょう。", 
+                "引き分け、ですか。……ふふ、ヒリヒリしてきましたね。さあ、もう一度ダイスを。", 
+                "互角ですね。……このままでは終われません。ダイスを拾いなさい。", 
+                "……まさかのドロー。貴方、なかなか良い勝負運を持っていますね。次で決めましょう。", 
+                "焦らしますね。さあ、次が本番です。", 
+                "運命の女神は気まぐれですね。……もう一度、私と踊っていただきましょう。", 
+                "フッ……面白い。あっさり終わるより、この方がずっと楽しめますよ。", 
+                "どうやら、ダイスも私たちの勝負に見入っているようですね。……さあ、もう一度。", 
+                "……まだ、貴方を逃がすわけにはいかないようです。勝負を続行します。", 
+                "ふふ、手が震えていませんか？ ……さあ、決着をつけましょう。"
+            ]
+        };
+
+        function speakDealerText(category) {
+            const arr = DIALOGUE[category];
+            if(!arr) return "";
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+        
+        // --- Timer State ---
+        let timerState = 'idle'; // idle, running, paused, flow
+        let targetTimeMs = 0;
+        let totalPausedMs = 0;
+        let pauseStartMs = 0;
+        let startTimeMs = 0;
+        let currentTask = '';
+        let uiInterval = null;
+        let milestone30 = false;
+        let milestone60 = false;
+        let isRolling = false;
+        let chartInstance = null;
+        let todayChartInstance = null;
+
+        function getPast7Days() {
+            const dates = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+            }
+            return dates;
+        }
+        function getTodayString() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        // セッションデータからタスクごとの合計時間を集計する
+        function aggregateTaskData(records) {
+            const result = {};
+            for (const date in records) {
+                if (!result[date]) result[date] = {};
+                const sessions = records[date];
+                if (Array.isArray(sessions)) {
+                    for (const session of sessions) {
+                        if (!result[date][session.task]) result[date][session.task] = 0;
+                        result[date][session.task] += session.duration;
+                    }
+                } else {
+                    // 旧データ形式との互換性
+                    result[date] = sessions;
+                }
+            }
+            return result;
+        }
+
+        // タイムスタンプを時刻文字列に変換
+        function formatTime(timestamp) {
+            const d = new Date(timestamp);
+            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+
+        // タスク名から色を生成（タスクごとに固定の色）
+        const COLORS = [
+            'rgba(178, 34, 34, 0.9)', 
+            'rgba(212, 175, 55, 0.9)', 
+            'rgba(59, 130, 246, 0.9)', 
+            'rgba(16, 185, 129, 0.9)', 
+            'rgba(139, 92, 246, 0.9)',
+            'rgba(236, 72, 153, 0.9)',
+            'rgba(245, 158, 11, 0.9)',
+            'rgba(139, 92, 246, 0.9)'
+        ];
+
+        function getTaskColor(taskName) {
+            let hash = 0;
+            for (let i = 0; i < taskName.length; i++) {
+                hash = taskName.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return COLORS[Math.abs(hash) % COLORS.length];
+        }
+
+        // --- DOM Elements ---
+        const contentMain = document.getElementById('content-main');
+        const contentDash = document.getElementById('content-dash');
+        const contentSettings = document.getElementById('content-settings');
+        const tabMain = document.getElementById('tab-main');
+        const tabDash = document.getElementById('tab-dash');
+        const tabSettings = document.getElementById('tab-settings');
+        
+        const mainDealerText = document.getElementById('main-dealer-text');
+        const diceValue = document.getElementById('dice-value');
+        const diceContainer = document.getElementById('dice-container');
+        const diceWrapper = document.getElementById('dice-wrapper');
+        const rollButton = document.getElementById('roll-button');
+        const taskSelect = document.getElementById('task-select');
+        const timerDisplay = document.getElementById('timer-display');
+        const controls = document.getElementById('controls');
+        const activeControls = document.getElementById('active-controls');
+        const pauseBtn = document.getElementById('pause-btn');
+        
+        const gambleControls = document.getElementById('gamble-controls');
+        const gambleActionControls = document.getElementById('gamble-action-controls');
+        const dealerDiceArea = document.getElementById('dealer-dice-area');
+        const dealerDiceValue = document.getElementById('dealer-dice-value');
+        const dealerDiceContainer = document.getElementById('dealer-dice-container');
+        const userDiceLabel = document.getElementById('user-dice-label');
+
+        const streakDisplay = document.getElementById('streak-display');
+        const dashDealerText = document.getElementById('dash-dealer-text');
+
+        const settingMinutes = document.getElementById('setting-minutes');
+        const settingRest = document.getElementById('setting-rest');
+        const settingTasks = document.getElementById('setting-tasks');
+        const saveSettingsBtn = document.getElementById('save-settings-btn');
+        const toast = document.getElementById('toast');
+
+        // --- Initialization ---
+        function initApp() {
+            populateTaskSelect();
+            populateSettingsUI();
+            mainDealerText.innerHTML = `「${speakDealerText('idle')}」`;
+            
+            // ディーラーレイヤーを確実に表示
+            const dealerLayer = document.getElementById('dealer-layer');
+            if (dealerLayer) {
+                dealerLayer.style.display = 'block';
+                dealerLayer.style.opacity = '1';
+                dealerLayer.style.visibility = 'visible';
+            }
+        }
+
+        function populateTaskSelect() {
+            taskSelect.innerHTML = '<option value="" disabled selected>集中する対象を選択…</option>';
+            currentSettings.tasks.forEach(task => {
+                if(task.trim() === '') return;
+                const opt = document.createElement('option');
+                opt.value = task.trim();
+                opt.innerText = task.trim();
+                taskSelect.appendChild(opt);
+            });
+        }
+
+        function populateSettingsUI() {
+            settingMinutes.value = currentSettings.focusMinutes;
+            settingRest.value = currentSettings.restMinutes;
+            settingTasks.value = currentSettings.tasks.join('\n');
+        }
+
+        function showToast(msg) {
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('hidden', 'toast-exit');
+            toast.classList.add('toast-enter');
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                setTimeout(() => { toast.classList.add('hidden'); toast.classList.remove('toast-exit'); }, 300);
+            }, 3000);
+        }
+
+        function exportData() {
+            const data = {
+                settings: JSON.parse(localStorage.getItem('focusDiceSettings')) || DEFAULT_SETTINGS,
+                records: JSON.parse(localStorage.getItem('focusDiceRecords')) || {}
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "focus_dice_backup.json");
+            dlAnchorElem.click();
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.settings) localStorage.setItem('focusDiceSettings', JSON.stringify(data.settings));
+                    if (data.records) localStorage.setItem('focusDiceRecords', JSON.stringify(data.records));
+                    alert('データを復元しました。設定を反映するためページを再読み込みします。');
+                    location.reload();
+                } catch (err) { alert('ファイルの読み込みに失敗しました。'); }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+        window.exportData = exportData;
+        window.importData = importData;
+
+        saveSettingsBtn.addEventListener('click', () => {
+            const minStr = settingMinutes.value;
+            let min = parseInt(minStr, 10);
+            if (isNaN(min) || min < 1) min = 5;
+
+            const restStr = settingRest.value;
+            let rMin = parseInt(restStr, 10);
+            if (isNaN(rMin) || rMin < 1) rMin = 5;
+
+            const tasksStr = settingTasks.value;
+            const tasksArray = tasksStr.split(/[\n,]+/).map(t => t.trim()).filter(t => t !== '');
+            currentSettings = { focusMinutes: min, restMinutes: rMin, tasks: tasksArray.length > 0 ? tasksArray : ["その他"] };
+            localStorage.setItem('focusDiceSettings', JSON.stringify(currentSettings));
+            populateTaskSelect();
+            settingTasks.value = currentSettings.tasks.join('\n');
+            showToast('設定を保存しました');
+        });
+
+        const tabsMap = {
+            'main': { content: contentMain, btn: tabMain },
+            'dash': { content: contentDash, btn: tabDash },
+            'settings': { content: contentSettings, btn: tabSettings }
+        };
+
+        function switchTab(tabId) {
+            if (isRolling || timerState !== 'idle') {
+                if(tabId !== 'main') {
+                    showToast('タイマー稼働中は移動できません');
+                }
+                return; 
+            }
+            
+            Object.keys(tabsMap).forEach(key => {
+                const t = tabsMap[key];
+                if (key === tabId) {
+                    t.content.classList.add('active');
+                    // アクティブなタブのスタイル
+                    t.btn.classList.remove('text-gray-500');
+                    t.btn.classList.add('text-casino-goldlight', 'bg-casino-gold/10', 'rounded-2xl', 'shadow-glow-gold');
+                    t.btn.querySelector('svg').classList.remove('opacity-70');
+                    t.btn.querySelector('svg').classList.add('drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]');
+                } else {
+                    t.content.classList.remove('active');
+                    // 非アクティブなタブのスタイル
+                    t.btn.classList.remove('text-casino-goldlight', 'bg-casino-gold/10', 'rounded-2xl', 'shadow-glow-gold');
+                    t.btn.classList.add('text-gray-500');
+                    t.btn.querySelector('svg').classList.add('opacity-70');
+                    t.btn.querySelector('svg').classList.remove('drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]');
+                }
+            });
+            if (tabId === 'dash') updateDashboard();
+            window.scrollTo(0, 0);
+        }
+        window.switchTab = switchTab;
+
+        // --- Main Game Logic ---
+        rollButton.addEventListener('click', () => {
+            if (isRolling || timerState !== 'idle') return;
+            initAudio(); 
+            
+            const task = taskSelect.value;
+            if (!task) {
+                mainDealerText.innerHTML = '「対象を選択してください。<br><span class="text-casino-redlight">準備なくして成果は得られません。</span>」';
+                return;
+            }
+
+            isRolling = true;
+            rollButton.disabled = true;
+            taskSelect.disabled = true;
+            currentTask = task;
+            
+            playDiceSound();
+            mainDealerText.innerText = '「……ダイスが振られました。」';
+            
+            const dl = document.getElementById('dealer-layer');
+            if (dl) {
+                // ディーラーレイヤーを確実に表示
+                dl.style.display = 'block';
+                dl.style.opacity = '1';
+                dl.style.visibility = 'visible';
+                
+                dl.classList.remove('dealer-roll-anim');
+                void dl.offsetWidth;
+                dl.classList.add('dealer-roll-anim');
+                
+                // アニメーション終了後も確実に表示
+                setTimeout(() => {
+                    dl.style.display = 'block';
+                    dl.style.opacity = '1';
+                    dl.style.visibility = 'visible';
+                }, 700);
+            }
+            
+            diceValue.className = 'text-5xl md:text-6xl font-cinzel font-bold text-white glow-white';
+            diceContainer.classList.add('dice-anim');
+            diceContainer.style.borderColor = 'rgba(255,255,255,0.5)';
+
+            let count = 0;
+            const interval = setInterval(() => {
+                diceValue.innerText = Math.floor(Math.random() * 6) + 1;
+                count++;
+                if (count > 12) {
+                    clearInterval(interval);
+                    finishRoll();
+                }
+            }, 80);
+        });
+
+        function finishRoll() {
+            diceContainer.classList.remove('dice-anim');
+            const result = Math.floor(Math.random() * 6) + 1;
+            diceValue.innerText = result;
+
+            if (result % 2 === 0) {
+                diceValue.className = 'text-6xl md:text-7xl font-cinzel font-bold text-casino-redlight glow-red transition-all scale-110';
+                diceContainer.style.borderColor = '#ff4444';
+                diceContainer.style.boxShadow = '0 0 40px rgba(178, 34, 34, 0.6)';
+                mainDealerText.innerHTML = `「<span class="text-casino-redlight text-xl font-bold">${result}</span><br>${speakDealerText('even')}」`;
+                setTimeout(() => startTimer(currentSettings.focusMinutes, false), 2000);
+            } else {
+                diceValue.className = 'text-6xl md:text-7xl font-cinzel font-bold text-blue-400 glow-blue transition-all scale-110';
+                diceContainer.style.borderColor = '#60a5fa';
+                diceContainer.style.boxShadow = '0 0 40px rgba(96, 165, 250, 0.4)';
+                mainDealerText.innerHTML = `「<span class="text-blue-400 text-xl font-bold">${result}</span><br>${speakDealerText('odd')}」`;
+                setTimeout(() => startTimer(currentSettings.restMinutes, true), 2000);
+            }
+        }
+
+        // --- Exact Time Logic ---
+        function startTimer(minutes, isRest) {
+            controls.style.opacity = '0';
+            controls.style.pointerEvents = 'none';
+            diceWrapper.style.opacity = '0';
+            diceWrapper.style.transform = 'scale(0.9)';
+            
+            setTimeout(() => {
+                controls.classList.add('hidden');
+                diceWrapper.classList.add('hidden');
+                timerDisplay.classList.remove('hidden');
+                timerDisplay.classList.add('animate-pulse');
+                
+                if (isRest) {
+                    activeControls.classList.add('hidden');
+                    activeControls.classList.remove('flex');
+                } else {
+                    activeControls.classList.remove('hidden');
+                    activeControls.classList.add('flex');
+                }
+                
+                void timerDisplay.offsetWidth;
+                timerDisplay.classList.remove('scale-95', 'opacity-0');
+                timerDisplay.classList.add('scale-100', 'opacity-100');
+            }, 500);
+            
+            startTimeMs = Date.now();
+            targetTimeMs = startTimeMs + (minutes * 60 * 1000);
+            totalPausedMs = 0;
+            pauseStartMs = 0;
+            timerState = isRest ? 'rest' : 'running';
+            milestone30 = false;
+            milestone60 = false;
+            
+            if (!isRest) requestWakeLock();
+            pauseBtn.innerHTML = '<span class="text-lg">⏸</span> 一時停止';
+            timerDisplay.className = 'text-6xl md:text-8xl font-mono font-bold text-white tracking-widest my-2 transition-all duration-500 drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]';
+            
+            if (isRest) {
+                timerDisplay.classList.remove('text-white', 'drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]');
+                timerDisplay.classList.add('text-blue-400', 'glow-blue');
+            }
+            
+            uiInterval = setInterval(updateTimerDisplay, 100);
+        }
+
+        function updateTimerDisplay() {
+            if (timerState === 'idle') return;
+            
+            let now = Date.now();
+            let effNow = now - totalPausedMs;
+            if (timerState === 'paused') effNow = pauseStartMs - totalPausedMs;
+            
+            let remainingMs = targetTimeMs - effNow;
+            
+            if (remainingMs > 0) {
+                // Countdown
+                let s = Math.ceil(remainingMs / 1000);
+                let m = Math.floor(s / 60);
+                s = s % 60;
+                timerDisplay.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            } else {
+                if (timerState === 'rest') {
+                    // Rest is over
+                    clearInterval(uiInterval);
+                    timerDisplay.innerText = "00:00";
+                    playTimerEndSound();
+                    
+                    timerState = 'idle';
+                    mainDealerText.innerHTML = `「休憩終了。席にお戻りください。<br>${speakDealerText('idle')}」`;
+                    
+                    resetToIdleUI();
+                    return;
+                }
+                
+                // Flow Mode
+                if (timerState === 'running') {
+                    timerState = 'flow';
+                    playTimerEndSound();
+                    mainDealerText.innerHTML = `「設定時間を超過しました。……おや、まだ続けると？<br><span class="text-casino-gold">貴方のその没入、見事ですね。</span>」`;
+                    timerDisplay.classList.remove('text-white', 'drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]');
+                    timerDisplay.classList.add('text-casino-gold', 'glow-gold');
+                }
+                
+                let overtimeMs = effNow - targetTimeMs;
+                let s = Math.floor(overtimeMs / 1000);
+                let m = Math.floor(s / 60);
+                s = s % 60;
+                timerDisplay.innerText = `+${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                
+                // Milestones
+                if (overtimeMs >= 120 * 60 * 1000) {
+                    mainDealerText.innerHTML = '「……まさか、寝落ちしたわけではありませんよね？<br>本日の計測はここまでとさせていただきます。」';
+                    finishAndSave();
+                } else if (overtimeMs >= 60 * 60 * 1000 && !milestone60) {
+                    milestone60 = true;
+                    mainDealerText.innerHTML = '「……ふふ。まさかここまでとは。<br>私も付き合いきれませんよ。素晴らしい。」';
+                } else if (overtimeMs >= 30 * 60 * 1000 && !milestone30) {
+                    milestone30 = true;
+                    mainDealerText.innerHTML = '「お見事です。<br><span class="text-casino-gold">貴方のその集中力、賞賛に値します。</span>」';
+                }
+            }
+        }
+
+        function togglePause() {
+            if (timerState === 'running' || timerState === 'flow') {
+                pauseStartMs = Date.now();
+                timerState = 'paused';
+                pauseBtn.innerHTML = '<span class="text-lg">▶</span> 再開';
+                mainDealerText.innerHTML = '「……小休止ですか？<br>構いませんよ、時計は止めておきましょう。」';
+                timerDisplay.classList.remove('animate-pulse');
+            } else if (timerState === 'paused') {
+                totalPausedMs += (Date.now() - pauseStartMs);
+                let effNow = Date.now() - totalPausedMs;
+                if (targetTimeMs - effNow > 0) {
+                    timerState = 'running';
+                    mainDealerText.innerHTML = `「再開ですね。残り時間、向かっていただきましょう。」`;
+                } else {
+                    timerState = 'flow';
+                    mainDealerText.innerHTML = `「再開ですね。貴方の集中力、引き続き見せてもらいましょう。」`;
+                }
+                pauseBtn.innerHTML = '<span class="text-lg">⏸</span> 一時停止';
+                timerDisplay.classList.add('animate-pulse');
+            }
+        }
+        window.togglePause = togglePause;
+
+        function finishAndSave() {
+            if (timerState === 'idle' || timerState === 'rest') return;
+            
+            clearInterval(uiInterval);
+            releaseWakeLock();
+            
+            let now = Date.now();
+            let effNow = now - totalPausedMs;
+            if (timerState === 'paused') effNow = pauseStartMs - totalPausedMs;
+            
+            let elapsedMs = effNow - startTimeMs;
+            let elapsedMins = Math.floor(elapsedMs / 60000); 
+            
+            const today = getTodayString();
+            if (!records[today]) records[today] = [];
+            
+            // セッション情報を記録
+            records[today].push({
+                task: currentTask,
+                startTime: startTimeMs,
+                endTime: effNow,
+                duration: elapsedMins
+            });
+            
+            localStorage.setItem('focusDiceRecords', JSON.stringify(records));
+            
+            timerState = 'idle';
+            timerDisplay.classList.remove('animate-pulse');
+            
+            // Gamble check
+            if (Math.random() < 0.1) {
+                mainDealerText.innerHTML = `「計 <span class="text-casino-gold">${elapsedMins}分</span> の記録を保存しました。<br><br>${speakDealerText('gamble_propose')}」`;
+                showGambleProposal();
+            } else {
+                mainDealerText.innerHTML = `「計 <span class="text-casino-gold">${elapsedMins}分</span> の記録を保存しました。<br>${speakDealerText('finish')}」`;
+                resetToIdleUI();
+            }
+        }
+        window.finishAndSave = finishAndSave;
+
+        function showGambleProposal() {
+            timerDisplay.classList.remove('scale-100', 'opacity-100');
+            timerDisplay.classList.add('scale-95', 'opacity-0');
+            activeControls.classList.add('hidden');
+            activeControls.classList.remove('flex');
+            
+            setTimeout(() => {
+                timerDisplay.classList.add('hidden');
+                gambleControls.classList.remove('hidden');
+                gambleControls.classList.add('flex');
+            }, 500);
+        }
+
+        function resetToIdleUI() {
+            timerDisplay.classList.remove('scale-100', 'opacity-100');
+            timerDisplay.classList.add('scale-95', 'opacity-0');
+            activeControls.classList.add('hidden');
+            activeControls.classList.remove('flex');
+            gambleControls.classList.add('hidden');
+            gambleControls.classList.remove('flex');
+            gambleActionControls.classList.add('hidden');
+            gambleActionControls.classList.remove('flex');
+            
+            userDiceLabel.classList.add('hidden');
+            dealerDiceArea.classList.add('hidden');
+            dealerDiceArea.classList.remove('flex');
+            
+            setTimeout(() => {
+                timerDisplay.classList.add('hidden');
+                controls.classList.remove('hidden');
+                diceWrapper.classList.remove('hidden');
+                void controls.offsetWidth;
+                controls.style.opacity = '1';
+                controls.style.pointerEvents = 'auto';
+                diceWrapper.style.opacity = '1';
+                diceWrapper.style.transform = 'scale(1)';
+                resetUI();
+            }, 500);
+        }
+
+        function rejectGamble() {
+            mainDealerText.innerHTML = `「……そうですか。堅実な選択ですね。お疲れ様でした。<br>${speakDealerText('idle')}」`;
+            resetToIdleUI();
+        }
+        window.rejectGamble = rejectGamble;
+
+        function acceptGamble() {
+            gambleControls.classList.add('hidden');
+            gambleControls.classList.remove('flex');
+            
+            gambleActionControls.classList.remove('hidden');
+            gambleActionControls.classList.add('flex');
+            
+            controls.classList.add('hidden');
+            diceWrapper.classList.remove('hidden');
+            diceWrapper.style.opacity = '1';
+            diceWrapper.style.transform = 'scale(1)';
+            
+            userDiceLabel.classList.remove('hidden');
+            dealerDiceArea.classList.remove('hidden');
+            dealerDiceArea.classList.add('flex');
+            
+            mainDealerText.innerHTML = `「良い覚悟です。……さあ、お互いのダイスを振りましょう。」`;
+        }
+        window.acceptGamble = acceptGamble;
+
+        function rollGambleDice() {
+            if (isRolling) return;
+            isRolling = true;
+            document.getElementById('gamble-roll-btn').disabled = true;
+            
+            initAudio();
+            playDiceSound();
+            mainDealerText.innerText = '「……運命のダイスが振られました。」';
+            
+            const dl = document.getElementById('dealer-layer');
+            if (dl) {
+                // ディーラーレイヤーを確実に表示
+                dl.style.display = 'block';
+                dl.style.opacity = '1';
+                dl.style.visibility = 'visible';
+                
+                dl.classList.remove('dealer-roll-anim');
+                void dl.offsetWidth;
+                dl.classList.add('dealer-roll-anim');
+                
+                // アニメーション終了後も確実に表示
+                setTimeout(() => {
+                    dl.style.display = 'block';
+                    dl.style.opacity = '1';
+                    dl.style.visibility = 'visible';
+                }, 700);
+            }
+            
+            diceValue.className = 'text-5xl md:text-6xl font-cinzel font-bold text-white glow-white';
+            diceContainer.classList.add('dice-anim');
+            diceContainer.style.borderColor = 'rgba(255,255,255,0.5)';
+            
+            dealerDiceValue.className = 'text-5xl md:text-6xl font-cinzel font-bold text-casino-gold glow-gold';
+            dealerDiceContainer.classList.add('dice-anim');
+            dealerDiceContainer.style.borderColor = 'rgba(212,175,55,0.5)';
+
+            let count = 0;
+            const interval = setInterval(() => {
+                diceValue.innerText = Math.floor(Math.random() * 6) + 1;
+                dealerDiceValue.innerText = Math.floor(Math.random() * 6) + 1;
+                count++;
+                if (count > 12) {
+                    clearInterval(interval);
+                    finishGambleRoll();
+                }
+            }, 80);
+        }
+        window.rollGambleDice = rollGambleDice;
+
+        function finishGambleRoll() {
+            diceContainer.classList.remove('dice-anim');
+            dealerDiceContainer.classList.remove('dice-anim');
+            
+            const userResult = Math.floor(Math.random() * 6) + 1;
+            const dealerResult = Math.floor(Math.random() * 6) + 1;
+            
+            diceValue.innerText = userResult;
+            dealerDiceValue.innerText = dealerResult;
+
+            if (userResult > dealerResult) {
+                // User Wins -> Absolute Rest
+                diceValue.classList.add('scale-125', 'text-blue-400', 'glow-blue');
+                diceValue.classList.remove('text-white', 'glow-white');
+                dealerDiceValue.classList.add('opacity-50');
+                
+                mainDealerText.innerHTML = `「<span class="text-blue-400 font-bold">${userResult} 対 ${dealerResult}</span><br>${speakDealerText('gamble_user_win')}」`;
+                const restTime = userResult * 10;
+                
+                isRolling = false;
+                document.getElementById('gamble-roll-btn').disabled = false;
+                
+                setTimeout(() => {
+                    gambleActionControls.classList.add('hidden');
+                    gambleActionControls.classList.remove('flex');
+                    startTimer(restTime, true);
+                }, 3000);
+            } else if (dealerResult > userResult) {
+                // Dealer Wins -> Forced Focus
+                dealerDiceValue.classList.add('scale-125', 'text-casino-redlight', 'glow-red');
+                dealerDiceValue.classList.remove('text-casino-gold', 'glow-gold');
+                diceValue.classList.add('opacity-50');
+                
+                mainDealerText.innerHTML = `「<span class="text-casino-redlight font-bold">${dealerResult} 対 ${userResult}</span><br>${speakDealerText('gamble_dealer_win')}」`;
+                const focusTime = dealerResult * 10;
+                
+                isRolling = false;
+                document.getElementById('gamble-roll-btn').disabled = false;
+                
+                setTimeout(() => {
+                    gambleActionControls.classList.add('hidden');
+                    gambleActionControls.classList.remove('flex');
+                    startTimer(focusTime, false);
+                }, 3000);
+            } else {
+                // Draw -> Sudden Death
+                mainDealerText.innerHTML = `「<span class="text-gray-400 font-bold">${userResult} 対 ${dealerResult}</span><br>${speakDealerText('gamble_draw')}」`;
+                setTimeout(() => {
+                    isRolling = false;
+                    document.getElementById('gamble-roll-btn').disabled = false;
+                }, 1500);
+            }
+        }
+
+        function resetUI() {
+            isRolling = false;
+            rollButton.disabled = false;
+            taskSelect.disabled = false;
+            taskSelect.value = '';
+            document.getElementById('gamble-roll-btn').disabled = false;
+            
+            diceValue.className = 'text-5xl md:text-6xl font-cinzel font-bold text-white glow-white scale-100 transition-all duration-1000';
+            diceValue.innerText = '?';
+            diceContainer.style.borderColor = 'rgba(255,255,255,0.2)';
+            diceContainer.style.boxShadow = '0 0 25px rgba(0,0,0,0.8)';
+            
+            dealerDiceValue.className = 'text-5xl md:text-6xl font-cinzel font-bold text-casino-gold glow-gold scale-100 transition-all duration-1000';
+            dealerDiceValue.innerText = '?';
+            dealerDiceContainer.style.borderColor = 'rgba(212,175,55,0.5)';
+        }
+
+        // --- Dashboard Logic ---
+        function updateDashboard() {
+            const today = getTodayString();
+            const aggregated = aggregateTaskData(records);
+            let todayTotal = 0;
+            if (aggregated[today]) {
+                todayTotal = Object.values(aggregated[today]).reduce((sum, val) => sum + val, 0);
+            }
+
+            if (todayTotal === 0) {
+                dashDealerText.innerText = '「本日はまだ記録がありませんね。準備が整い次第、ダイスをお振りください。」';
+            } else if (todayTotal < 30) {
+                dashDealerText.innerText = '「着実に積み重ねていますね。その調子で継続していきましょう。」';
+            } else {
+                if (Math.random() < 0.05) {
+                    dashDealerText.innerHTML = '「素晴らしい。……<br><span class="text-casino-gold">貴方が真剣に向き合う姿、実は嫌いではありませんよ。</span>」';
+                } else {
+                    dashDealerText.innerText = '「目を見張るほどの集中力です。本日の成果は十分に誇れるものでしょう。」';
+                }
+            }
+
+            let streak = 0;
+            let checkDate = new Date();
+            while (true) {
+                const year = checkDate.getFullYear();
+                const month = String(checkDate.getMonth() + 1).padStart(2, '0');
+                const day = String(checkDate.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                
+                const dayTotal = aggregated[dateStr] ? Object.values(aggregated[dateStr]).reduce((a,b)=>a+b,0) : 0;
+                
+                if (dayTotal > 0) {
+                    streak++;
+                    checkDate.setDate(checkDate.getDate() - 1);
+                } else {
+                    if (streak === 0 && dateStr === today) {
+                        checkDate.setDate(checkDate.getDate() - 1);
+                        const yYear = checkDate.getFullYear();
+                        const yMonth = String(checkDate.getMonth() + 1).padStart(2, '0');
+                        const yDay = String(checkDate.getDate()).padStart(2, '0');
+                        const yStr = `${yYear}-${yMonth}-${yDay}`;
+                        
+                        const yTotal = records[yStr] ? Object.values(records[yStr]).reduce((a,b)=>a+b,0) : 0;
+                        if (yTotal > 0) {
+                            streak++;
+                            checkDate.setDate(checkDate.getDate() - 1);
+                            continue;
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            streakDisplay.innerText = `現在 ${streak}日連続 集中達成中`;
+            renderChart();
+            renderTodayChart();
+            renderSessionList();
+        }
+
+        function renderSessionList() {
+            const today = getTodayString();
+            const sessionList = document.getElementById('session-list');
+            const sessions = records[today] || [];
+            
+            console.log('Rendering session list for', today);
+            console.log('Sessions:', sessions);
+            
+            if (!Array.isArray(sessions) || sessions.length === 0) {
+                sessionList.innerHTML = '<p class="text-gray-500 text-center py-4">まだ記録がありません</p>';
+                return;
+            }
+            
+            sessionList.innerHTML = sessions.map((session, index) => `
+                <div class="bg-black/40 rounded-2xl p-5 border border-white/15 hover:border-white/30 transition-all mb-4 shadow-lg">
+                    <div class="flex items-center justify-between gap-2 mb-4">
+                        <div class="text-white font-semibold text-lg">${session.task}</div>
+                        <div class="text-casino-gold font-bold text-2xl drop-shadow-lg">${session.duration}分</div>
+                    </div>
+                    <div class="text-gray-300 text-sm flex items-center gap-3 mb-5">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span class="font-mono">${formatTime(session.startTime)} 〜 ${formatTime(session.endTime)}</span>
+                    </div>
+                    <div class="flex gap-4">
+                    <button onclick="editSession(${index})" class="flex-1 bg-blue-500/20 hover:bg-blue-500/30 active:bg-blue-500/40 active:scale-[0.97] text-blue-400 px-5 py-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        編集
+                    </button>
+                    <button onclick="deleteSession(${index})" class="flex-1 bg-red-500/20 hover:bg-red-500/30 active:bg-red-500/40 active:scale-[0.97] text-red-400 px-5 py-4 rounded-xl text-base font-bold transition-all flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        削除
+                    </button>
+                </div>
+                </div>
+            `).join('');
+        }
+
+        function editSession(index) {
+            const today = getTodayString();
+            const sessions = records[today];
+            if (!sessions || !sessions[index]) return;
+            
+            const session = sessions[index];
+            
+            // 時刻をHH:MM形式に変換
+            function formatTimeInput(timestamp) {
+                const d = new Date(timestamp);
+                return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            }
+            
+            // プロンプトで新しい値を入力
+            const newStartTimeStr = prompt(`「${session.task}」の開始時刻を変更します\n現在: ${formatTimeInput(session.startTime)}\n新しい時刻（HHMM または HH:MM）を入力してください:`, formatTimeInput(session.startTime));
+            if (newStartTimeStr === null) return;
+            
+            const newEndTimeStr = prompt(`「${session.task}」の終了時刻を変更します\n現在: ${formatTimeInput(session.endTime)}\n新しい時刻（HHMM または HH:MM）を入力してください:`, formatTimeInput(session.endTime));
+            if (newEndTimeStr === null) return;
+            
+            // 時刻を解析してタイムスタンプに変換（HHMM または HH:MM に対応）
+            function parseTimeInput(timeStr, baseTimestamp) {
+                timeStr = timeStr.trim();
+                let hours, minutes;
+                
+                // HHMM形式（4桁）の場合
+                if (/^\d{4}$/.test(timeStr)) {
+                    hours = parseInt(timeStr.substring(0, 2), 10);
+                    minutes = parseInt(timeStr.substring(2, 4), 10);
+                } 
+                // HH:MM形式の場合
+                else if (timeStr.includes(':')) {
+                    [hours, minutes] = timeStr.split(':').map(Number);
+                }
+                // その他の形式
+                else {
+                    return null;
+                }
+                
+                // 時刻の妥当性チェック
+                if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+                    return null;
+                }
+                
+                const d = new Date(baseTimestamp);
+                d.setHours(hours, minutes, 0, 0);
+                return d.getTime();
+            }
+            
+            const newStartTime = parseTimeInput(newStartTimeStr, session.startTime);
+            const newEndTime = parseTimeInput(newEndTimeStr, session.endTime);
+            
+            if (newStartTime !== null && newEndTime !== null && newEndTime > newStartTime) {
+                session.startTime = newStartTime;
+                session.endTime = newEndTime;
+                session.duration = Math.floor((newEndTime - newStartTime) / 60000);
+                localStorage.setItem('focusDiceRecords', JSON.stringify(records));
+                updateDashboard();
+                showToast('記録を更新しました');
+            } else {
+                showToast('無効な時刻です。HHMM または HH:MM で入力してください');
+            }
+        }
+        window.editSession = editSession;
+
+        function deleteSession(index) {
+            const today = getTodayString();
+            const sessions = records[today];
+            if (!sessions || !sessions[index]) return;
+            
+            if (confirm(`「${sessions[index].task}」の記録を削除しますか？`)) {
+                sessions.splice(index, 1);
+                localStorage.setItem('focusDiceRecords', JSON.stringify(records));
+                updateDashboard();
+                showToast('記録を削除しました');
+            }
+        }
+        window.deleteSession = deleteSession;
+
+        function renderChart() {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            const dates = getPast7Days();
+            const aggregated = aggregateTaskData(records);
+            const tasksSet = new Set();
+            dates.forEach(d => {
+                if (aggregated[d]) Object.keys(aggregated[d]).forEach(t => tasksSet.add(t));
+            });
+            const allTasks = Array.from(tasksSet);
+
+            const datasets = allTasks.map((task) => {
+                return {
+                    label: task,
+                    data: dates.map(d => (aggregated[d] && aggregated[d][task]) ? aggregated[d][task] : 0),
+                    backgroundColor: getTaskColor(task),
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                };
+            });
+
+            const displayLabels = dates.map(d => {
+                const parts = d.split('-');
+                return `${parts[1]}/${parts[2]}`;
+            });
+
+            if (chartInstance) chartInstance.destroy();
+            Chart.defaults.color = 'rgba(255,255,255,0.6)';
+            Chart.defaults.font.family = '"Roboto Mono", monospace';
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: displayLabels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: 'rgba(255,255,255,0.8)', font: { family: '"Noto Serif JP", serif', size: 14 } } },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#d4af37',
+                            bodyColor: '#e5e5e5',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            titleFont: { family: '"Roboto Mono", monospace' },
+                            bodyFont: { family: '"Noto Serif JP", serif' }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false }, ticks: { color: 'rgba(255,255,255,0.6)', font: { size: 12 } } },
+                        y: { stacked: true, grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false }, ticks: { color: 'rgba(255,255,255,0.6)', stepSize: 5, callback: function(value) { return value + 'm'; }, font: { size: 12 } }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderTodayChart() {
+            const ctx = document.getElementById('todayChart').getContext('2d');
+            const today = getTodayString();
+            const aggregated = aggregateTaskData(records);
+            const todayRecords = aggregated[today] || {};
+            const tasks = Object.keys(todayRecords);
+
+            const data = {
+                labels: tasks.length > 0 ? tasks : ['まだ記録がありません'],
+                datasets: [{
+                    data: tasks.length > 0 ? Object.values(todayRecords) : [1],
+                    backgroundColor: tasks.length > 0 ? tasks.map(task => getTaskColor(task)) : ['rgba(100, 100, 100, 0.5)'],
+                    borderColor: 'rgba(255,255,255,0.2)',
+                    borderWidth: 2
+                }]
+            };
+
+            if (todayChartInstance) todayChartInstance.destroy();
+            Chart.defaults.color = 'rgba(255,255,255,0.6)';
+            Chart.defaults.font.family = '"Roboto Mono", monospace';
+
+            todayChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            position: 'right',
+                            labels: { 
+                                color: 'rgba(255,255,255,0.8)', 
+                                font: { family: '"Noto Serif JP", serif', size: 14 },
+                                padding: 15
+                            } 
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#d4af37',
+                            bodyColor: '#e5e5e5',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    return `${label}: ${value}分`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '50%'
+                }
+            });
+        }
+
+        // --- Mouse Parallax Removed (Using Autonomous CSS Animations instead) ---
+
+        // --- Blink Logic ---
+        function triggerBlink() {
+            const dl = document.getElementById('dealer-layer');
+            if (dl) {
+                dl.classList.add('is-blinking');
+                setTimeout(() => {
+                    dl.classList.remove('is-blinking');
+                    if (Math.random() < 0.2) {
+                        setTimeout(() => {
+                            dl.classList.add('is-blinking');
+                            setTimeout(() => dl.classList.remove('is-blinking'), 150);
+                        }, 50);
+                    }
+                }, 150);
+            }
+            setTimeout(triggerBlink, 3000 + Math.random() * 5000);
+        }
+        setTimeout(triggerBlink, 2000);
+
+        initApp();
+
+        // Service Workerの登録
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => {
+                        console.log('[App] Service Worker registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.error('[App] Service Worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

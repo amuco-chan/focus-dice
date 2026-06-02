@@ -1,0 +1,18 @@
+{
+  "name": "Focus Dice",
+  "short_name": "Focus Dice",
+  "description": "カジノテイストの集中力アップアプリ",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#d4af37",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "ikemen.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
