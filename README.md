@@ -199,5 +199,61 @@ Vercelは超簡単にPWAを公開できます。
 
 ---
 
-## �� PWAとして使う
+## 🔐 Firebase ログイン & クラウド同期（オプション）
+
+アプリにGoogleログイン機能とクラウドデータ同期機能を追加することができます。
+
+### 1. Firebase プロジェクトを作成
+
+1. [Firebase Console](https://console.firebase.google.com/) を開き、「**プロジェクトを作成**」をクリック
+2. プロジェクト名を入力し、「**続行**」→「**プロジェクトを作成**」
+3. プロジェクトが作成されたら、「**続行**」
+
+### 2. ウェブアプリを登録
+
+1. Firebase Console のトップページで、「**ウェブアプリを追加**」ボタン（`</>`アイコン）をクリック
+2. アプリのニックネームを入力（例：`Focus Dice Web`）
+3. 「**アプリを登録**」をクリック
+4. 表示される「**const firebaseConfig = { ... }**」の部分をコピー
+
+### 3. Firebase 設定ファイルを編集
+
+1. プロジェクト内の `public/firebase-config.js` ファイルを開く
+2. コピーした `firebaseConfig` の内容で、既存のダミーデータを置き換える
+
+例：
+```javascript
+const firebaseConfig = {
+  apiKey: "AIzaSy...", // 実際のAPIキー
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abcdef123456"
+};
+```
+
+### 4. Firebase サービスを有効化
+
+#### Google ログインを有効化
+1. Firebase Console の左メニューから「**Authentication**」を開く
+2. 「**Sign-in method**」タブをクリック
+3. 「**新しいプロバイダを追加**」→「**Google**」を選択
+4. 「**有効にする**」をオン →「**保存**」
+
+#### Firestore Database を作成
+1. 左メニューから「**Firestore Database**」を開く
+2. 「**データベースを作成**」をクリック
+3. 「**テストモードで開始**」を選択 →「**次へ**」
+4. ロケーションは「**asia-northeast1 (東京)**」を選択 →「**有効にする**」
+
+### 5. デプロイ
+
+設定が完了したら、変更を GitHub にプッシュすると Vercel が自動的に再デプロイします。
+
+アプリを開くと、右上に「**Googleでログイン**」ボタンが表示されます！
+
+---
+
+## 📱 PWAとして使う
 ウェブブラウザで `index.html` を開くか、HTTPSでホスティングしてホーム画面に追加してください。

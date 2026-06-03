@@ -13,6 +13,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Serif+JP:wght@400;500;600&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="./firebase-config.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -265,8 +272,25 @@
     </div>
     <div class="overlay"></div>
 
+    <!-- User Header -->
+    <div id="user-header" class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 bg-black/50 backdrop-blur-sm border-b border-white/10">
+        <div class="flex items-center gap-3">
+            <img id="user-avatar" src="" alt="" class="w-10 h-10 rounded-full border-2 border-casino-gold/50 hidden">
+            <span id="user-name" class="text-white font-serif text-sm hidden"></span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span id="sync-status" class="text-xs text-gray-400 font-mono hidden"></span>
+            <button id="login-btn" class="px-4 py-2 bg-gradient-to-r from-casino-goldlight to-casino-gold text-black font-bold rounded-xl text-sm hover:scale-105 transition-transform shadow-glow-gold">
+                Googleでログイン
+            </button>
+            <button id="logout-btn" class="px-4 py-2 bg-white/10 border border-white/20 text-white font-bold rounded-xl text-sm hover:bg-white/20 transition-all hidden">
+                ログアウト
+            </button>
+        </div>
+    </div>
+
     <!-- Main Content Container -->
-    <div class="content-area relative z-10 w-full flex flex-col items-center overflow-x-hidden overflow-y-auto h-[100dvh] pb-[90px] pt-4">
+    <div class="content-area relative z-10 w-full flex flex-col items-center overflow-x-hidden overflow-y-auto h-[100dvh] pb-[90px] pt-16">
         
         <!-- Tab 1: Main Game -->
         <main id="content-main" class="tab-content active flex-col items-center w-full max-w-lg px-4 gap-6 text-center">
@@ -935,6 +959,11 @@
             populateTaskSelect();
             settingTasks.value = currentSettings.tasks.join('\n');
             showToast('設定を保存しました');
+            
+            // Sync to Firestore if logged in
+            if (currentUser && typeof saveToFirestore !== 'undefined') {
+                saveToFirestore();
+            }
         });
 
         const tabsMap = {
@@ -1199,6 +1228,11 @@
             });
             
             localStorage.setItem('focusDiceRecords', JSON.stringify(records));
+            
+            // Sync to Firestore if logged in
+            if (currentUser && typeof saveToFirestore !== 'undefined') {
+                saveToFirestore();
+            }
             
             timerState = 'idle';
             timerDisplay.classList.remove('animate-pulse');
@@ -1722,6 +1756,196 @@
         setTimeout(triggerBlink, 2000);
 
         initApp();
+
+        // --- Firebase Integration ---
+        let auth = null;
+        let db = null;
+        let currentUser = null;
+        let unsubscribeAuth = null;
+        let unsubscribeFirestore = null;
+        let isSyncing = false;
+
+        // DOM Elements for Firebase
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userAvatar = document.getElementById('user-avatar');
+        const userName = document.getElementById('user-name');
+        const syncStatus = document.getElementById('sync-status');
+
+        // Initialize Firebase Services
+        function initFirebase() {
+            try {
+                if (typeof firebase !== 'undefined') {
+                    auth = firebase.auth();
+                    db = firebase.firestore();
+                    console.log('[Firebase] Initialized');
+                    
+                    // Set up auth state listener
+                    unsubscribeAuth = auth.onAuthStateChanged(handleAuthStateChanged);
+                } else {
+                    console.warn('[Firebase] SDK not loaded');
+                }
+            } catch (e) {
+                console.error('[Firebase] Init error:', e);
+            }
+        }
+
+        // Handle Auth State Changes
+        function handleAuthStateChanged(user) {
+            currentUser = user;
+            updateAuthUI();
+            
+            if (user) {
+                console.log('[Firebase] User logged in:', user.uid);
+                startFirestoreSync();
+            } else {
+                console.log('[Firebase] User logged out');
+                stopFirestoreSync();
+            }
+        }
+
+        // Update UI based on auth state
+        function updateAuthUI() {
+            if (currentUser) {
+                loginBtn.classList.add('hidden');
+                logoutBtn.classList.remove('hidden');
+                userAvatar.classList.remove('hidden');
+                userName.classList.remove('hidden');
+                syncStatus.classList.remove('hidden');
+                
+                if (currentUser.photoURL) {
+                    userAvatar.src = currentUser.photoURL;
+                }
+                userName.textContent = currentUser.displayName || currentUser.email || 'ユーザー';
+            } else {
+                loginBtn.classList.remove('hidden');
+                logoutBtn.classList.add('hidden');
+                userAvatar.classList.add('hidden');
+                userName.classList.add('hidden');
+                syncStatus.classList.add('hidden');
+            }
+        }
+
+        // Google Sign In
+        function signInWithGoogle() {
+            if (!auth) return;
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    console.log('[Firebase] Sign in successful');
+                    showToast('ログインしました');
+                })
+                .catch((error) => {
+                    console.error('[Firebase] Sign in error:', error);
+                    showToast('ログインに失敗しました');
+                });
+        }
+
+        // Sign Out
+        function signOut() {
+            if (!auth) return;
+            auth.signOut()
+                .then(() => {
+                    console.log('[Firebase] Sign out successful');
+                    showToast('ログアウトしました');
+                })
+                .catch((error) => {
+                    console.error('[Firebase] Sign out error:', error);
+                });
+        }
+
+        // Start Firestore Sync
+        function startFirestoreSync() {
+            if (!db || !currentUser) return;
+            
+            const userDocRef = db.collection('users').doc(currentUser.uid);
+            
+            // Listen for changes from Firestore
+            unsubscribeFirestore = userDocRef.onSnapshot(
+                (doc) => {
+                    if (doc.exists && !isSyncing) {
+                        const data = doc.data();
+                        if (data.records) {
+                            console.log('[Firebase] Receiving data from cloud');
+                            isSyncing = true;
+                            records = data.records;
+                            localStorage.setItem('focusDiceRecords', JSON.stringify(records));
+                            
+                            if (data.settings) {
+                                currentSettings = data.settings;
+                                localStorage.setItem('focusDiceSettings', JSON.stringify(currentSettings));
+                            }
+                            
+                            updateDashboard();
+                            populateSettingsUI();
+                            syncStatus.textContent = '✓ 同期完了';
+                            syncStatus.classList.remove('text-gray-400');
+                            syncStatus.classList.add('text-green-400');
+                            setTimeout(() => isSyncing = false, 500);
+                        }
+                    }
+                },
+                (error) => {
+                    console.error('[Firebase] Listen error:', error);
+                    syncStatus.textContent = '⚠ 同期エラー';
+                    syncStatus.classList.remove('text-gray-400', 'text-green-400');
+                    syncStatus.classList.add('text-yellow-400');
+                }
+            );
+            
+            // Initial data push (if local has data and cloud doesn't)
+            userDocRef.get().then((doc) => {
+                if (!doc.exists) {
+                    saveToFirestore();
+                }
+            });
+        }
+
+        // Stop Firestore Sync
+        function stopFirestoreSync() {
+            if (unsubscribeFirestore) {
+                unsubscribeFirestore();
+                unsubscribeFirestore = null;
+            }
+        }
+
+        // Save data to Firestore
+        function saveToFirestore() {
+            if (!db || !currentUser || isSyncing) return;
+            
+            const userDocRef = db.collection('users').doc(currentUser.uid);
+            
+            syncStatus.textContent = '⏳ 同期中...';
+            syncStatus.classList.remove('text-gray-400', 'text-green-400', 'text-yellow-400');
+            syncStatus.classList.add('text-casino-gold');
+            
+            userDocRef.set({
+                records: records,
+                settings: currentSettings,
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true })
+                .then(() => {
+                    console.log('[Firebase] Data saved to cloud');
+                    syncStatus.textContent = '✓ 同期完了';
+                    syncStatus.classList.remove('text-gray-400', 'text-casino-gold', 'text-yellow-400');
+                    syncStatus.classList.add('text-green-400');
+                })
+                .catch((error) => {
+                    console.error('[Firebase] Save error:', error);
+                    syncStatus.textContent = '⚠ 同期エラー';
+                    syncStatus.classList.remove('text-gray-400', 'text-casino-gold', 'text-green-400');
+                    syncStatus.classList.add('text-yellow-400');
+                });
+        }
+
+        // Add event listeners for login/logout buttons
+        loginBtn.addEventListener('click', signInWithGoogle);
+        logoutBtn.addEventListener('click', signOut);
+
+        // Initialize Firebase when page loads
+        window.addEventListener('load', () => {
+            initFirebase();
+        });
 
         // Service Workerの登録
         if ('serviceWorker' in navigator) {
